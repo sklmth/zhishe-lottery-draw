@@ -241,6 +241,15 @@
     margin-top: 4px;
     letter-spacing: 2px;
   }
+  .live-status {
+    min-height: 20px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--neon-blue);
+    letter-spacing: 1px;
+  }
+  .live-status.busy { color: var(--gold); }
+  .live-status.error { color: var(--neon-pink); }
 
   /* Wheel area */
   .wheel-area {
@@ -894,6 +903,7 @@
           maxlength="12"
         >
         <div class="progress-info" id="progressInfo">0 / 12 已完成</div>
+        <div class="live-status" id="liveStatus">实时同步已开启</div>
       </div>
 
       <div class="excitement-bar"><div class="excitement-fill" id="exciteFill"></div></div>
@@ -1059,6 +1069,8 @@ let drawHistory = [];    // [{order, name, number}] – mirrors API payload
 let currentIndex = 0;
 let spinAngle = 0;
 let animId = null;
+let localSpinning = false;
+let pollingTimer = null;
 
 // Canvas wheel
 const canvas = document.getElementById('wheel');
@@ -1074,7 +1086,7 @@ function onNameInput() {
   const val = document.getElementById('liveNameInput').value.trim();
   const btn = document.getElementById('spinBtn');
   const card = document.getElementById('nameInputCard');
-  btn.disabled = val.length === 0;
+  btn.disabled = val.length === 0 || localSpinning;
   if (val.length > 0) {
     card.classList.add('has-name');
   } else {
@@ -1197,6 +1209,7 @@ async function startDraw() {
   const current = await loadCurrentDraw();
   if (current && current.total > 0 && current.total < 12) {
     hydrateCurrentDraw(current);
+    startPolling();
     showToast('已进入当前抽签轮次');
     return;
   }
@@ -1221,6 +1234,8 @@ async function startDraw() {
   document.getElementById('nameInputCard').classList.remove('has-name');
 
   updateBanner();
+  setLiveStatus('实时同步已开启');
+  startPolling();
   drawWheel(spinAngle);
 
   // Auto-focus the name input
@@ -1238,6 +1253,39 @@ function updateBanner() {
 function showPhase(id) {
   document.querySelectorAll('.phase').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+}
+
+function setLiveStatus(text, cls = '') {
+  const el = document.getElementById('liveStatus');
+  if (!el) return;
+  el.className = `live-status ${cls}`.trim();
+  el.textContent = text || '实时同步已开启';
+}
+
+function startPolling() {
+  if (pollingTimer) return;
+  pollingTimer = setInterval(refreshCurrentDraw, 2500);
+}
+
+async function refreshCurrentDraw() {
+  if (localSpinning || document.getElementById('resultFlash').classList.contains('show')) return;
+  const current = await loadCurrentDraw();
+  if (!current) {
+    setLiveStatus('同步失败，稍后会自动重试', 'error');
+    return;
+  }
+  const state = current.state || { status: 'idle' };
+  if (state.status === 'spinning') {
+    setLiveStatus(`${state.spinner || '其他人'} 正在抽签，请稍候…`, 'busy');
+    document.getElementById('spinBtn').disabled = true;
+  } else {
+    setLiveStatus('实时同步已开启');
+    onNameInput();
+  }
+  if (document.getElementById('phase1').classList.contains('active')) return;
+  if (Array.isArray(current.draws) && current.draws.length !== drawHistory.length) {
+    hydrateCurrentDraw(current);
+  }
 }
 
 function applyDraws(draws) {
@@ -1272,12 +1320,14 @@ function hydrateCurrentDraw(data) {
   }
 
   showPhase('phase2');
+  const state = data.state || { status: 'idle' };
   const input = document.getElementById('liveNameInput');
   input.value = '';
-  input.disabled = false;
+  input.disabled = state.status === 'spinning';
   document.getElementById('spinBtn').disabled = true;
   document.getElementById('nameInputCard').classList.remove('has-name');
   updateBanner();
+  setLiveStatus(state.status === 'spinning' ? `${state.spinner || '其他人'} 正在抽签，请稍候…` : '实时同步已开启', state.status === 'spinning' ? 'busy' : '');
   drawWheel(spinAngle);
   setTimeout(() => input.focus(), 100);
 }
@@ -1289,6 +1339,7 @@ async function spinWheel() {
   if (!nameVal) return;
 
   const btn = document.getElementById('spinBtn');
+  localSpinning = true;
   btn.disabled = true;
   document.getElementById('liveNameInput').disabled = true;
 
@@ -1297,15 +1348,19 @@ async function spinWheel() {
     spinResult = await serverSpin(nameVal);
   } catch (err) {
     console.error('服务器抽签失败:', err);
-    showToast('✕ 服务器抽签失败，请重试');
+    showToast(String(err.message || '').includes('正在抽签') ? '✕ 当前有人正在抽签，请稍候' : '✕ 服务器抽签失败，请重试');
+    localSpinning = false;
     btn.disabled = false;
     document.getElementById('liveNameInput').disabled = false;
+    refreshCurrentDraw();
     return;
   }
 
   if (Array.isArray(spinResult.draws)) {
     applyDraws(spinResult.draws.filter(d => d.draw_order !== spinResult.draw.draw_order));
   }
+
+  setLiveStatus(`${nameVal} 正在抽签…`, 'busy');
 
   const targetNum = spinResult.draw.draw_number;
   currentIndex = spinResult.draw.draw_order;
@@ -1387,6 +1442,10 @@ async function spinWheel() {
 
       showResult(targetNum, nameVal);
       addChip(targetNum, nameVal);
+      completeServerSpin(nameVal).finally(() => {
+        localSpinning = false;
+        refreshCurrentDraw();
+      });
     }
   }
   animId = requestAnimationFrame(animate);
@@ -1547,6 +1606,7 @@ async function showFinalResults(showSavedToast = true) {
 }
 
 function restart() {
+  if (!confirm('确定要清空当前轮次并重新抽签吗？')) return;
   resetCurrentDraw(true);
   assignedMap = {};
   usedNumbers = new Set();
@@ -1571,6 +1631,18 @@ async function serverSpin(name) {
   });
   if (!resp.ok) throw new Error(await resp.text());
   return await resp.json();
+}
+
+async function completeServerSpin(name) {
+  try {
+    await fetch('/api/current-draw/complete-spin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+  } catch (err) {
+    console.error('结束全局抽签状态失败:', err);
+  }
 }
 
 async function loadCurrentDraw() {
@@ -1743,6 +1815,7 @@ spinAngle = -Math.PI / 2 - Math.PI / N;
 drawWheel(spinAngle);
 loadCurrentDraw().then((data) => {
   if (data && data.total > 0) hydrateCurrentDraw(data);
+  startPolling();
 });
 </script>
 </body>

@@ -73,6 +73,29 @@ const stmts = {
   clearActiveDraws: db.prepare('DELETE FROM active_draws'),
 };
 
+const liveState = {
+  status: 'idle',
+  spinner: null,
+  startedAt: null,
+};
+
+function getActiveCount() {
+  return stmts.countActiveDraws.get().cnt;
+}
+
+function normalizeLiveState() {
+  if (liveState.status === 'spinning' && liveState.startedAt && Date.now() - liveState.startedAt > 15000) {
+    liveState.status = 'idle';
+    liveState.spinner = null;
+    liveState.startedAt = null;
+  }
+  return {
+    status: liveState.status,
+    spinner: liveState.spinner,
+    startedAt: liveState.startedAt,
+  };
+}
+
 // ── Express app ───────────────────────────────────────────────────────────────
 const app = express();
 app.use(express.json());
@@ -90,6 +113,7 @@ function activePayload() {
   return {
     total: draws.length,
     remaining: Math.max(0, 12 - draws.length),
+    state: normalizeLiveState(),
     draws,
   };
 }
@@ -121,10 +145,13 @@ app.get('/api/current-draw', (_req, res) => {
 app.post('/api/current-draw/reset', (_req, res) => {
   try {
     const force = Boolean(_req.body && _req.body.force);
-    const { cnt } = stmts.countActiveDraws.get();
+    const cnt = getActiveCount();
     if (cnt > 0 && cnt < 12 && !force) {
       return res.status(409).json({ error: '当前轮次正在进行，不能重置', ...activePayload() });
     }
+    liveState.status = 'idle';
+    liveState.spinner = null;
+    liveState.startedAt = null;
     stmts.clearActiveDraws.run();
     res.json({ success: true, ...activePayload() });
   } catch (err) {
@@ -152,16 +179,38 @@ app.post('/api/current-draw/spin', (req, res) => {
     const drawOrder = current.length;
 
     stmts.insertActiveDraw.run(drawOrder, name, drawNumber);
+    liveState.status = 'spinning';
+    liveState.spinner = name;
+    liveState.startedAt = Date.now();
     const draw = { draw_order: drawOrder, member_name: name, draw_number: drawNumber };
-    const completedSession = drawOrder === 11 ? persistCompletedActiveSession() : null;
+    const shouldComplete = drawOrder === 11;
+    let completedSession = null;
+    if (shouldComplete) {
+      completedSession = persistCompletedActiveSession();
+      liveState.status = 'idle';
+      liveState.spinner = null;
+      liveState.startedAt = null;
+      stmts.clearActiveDraws.run();
+    }
     db.exec('COMMIT');
 
-    res.status(201).json({ success: true, draw, completed: drawOrder === 11, session: completedSession, ...activePayload() });
+    res.status(201).json({ success: true, draw, completed: shouldComplete, session: completedSession, ...activePayload() });
   } catch (err) {
     try { db.exec('ROLLBACK'); } catch (_) {}
     console.error('服务器分配抽签号码失败:', err);
     res.status(500).json({ error: '抽签失败' });
   }
+});
+
+app.post('/api/current-draw/complete-spin', (req, res) => {
+  const name = String((req.body && req.body.name) || '').trim();
+  normalizeLiveState();
+  if (liveState.status === 'spinning' && (!name || liveState.spinner === name)) {
+    liveState.status = 'idle';
+    liveState.spinner = null;
+    liveState.startedAt = null;
+  }
+  res.json({ success: true, ...activePayload() });
 });
 
 // ── POST /api/sessions ────────────────────────────────────────────────────────
