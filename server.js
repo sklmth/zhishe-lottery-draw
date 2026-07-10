@@ -120,6 +120,11 @@ app.get('/api/current-draw', (_req, res) => {
 
 app.post('/api/current-draw/reset', (_req, res) => {
   try {
+    const force = Boolean(_req.body && _req.body.force);
+    const { cnt } = stmts.countActiveDraws.get();
+    if (cnt > 0 && cnt < 12 && !force) {
+      return res.status(409).json({ error: '当前轮次正在进行，不能重置', ...activePayload() });
+    }
     stmts.clearActiveDraws.run();
     res.json({ success: true, ...activePayload() });
   } catch (err) {

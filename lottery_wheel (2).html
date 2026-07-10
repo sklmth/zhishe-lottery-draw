@@ -1201,7 +1201,7 @@ async function startDraw() {
     return;
   }
 
-  const resetOk = await resetCurrentDraw();
+  const resetOk = await resetCurrentDraw(false);
   if (!resetOk) {
     showToast('✕ 服务器重置失败，请稍后重试');
     return;
@@ -1547,7 +1547,7 @@ async function showFinalResults(showSavedToast = true) {
 }
 
 function restart() {
-  resetCurrentDraw();
+  resetCurrentDraw(true);
   assignedMap = {};
   usedNumbers = new Set();
   currentIndex = 0;
@@ -1584,9 +1584,18 @@ async function loadCurrentDraw() {
   }
 }
 
-async function resetCurrentDraw() {
+async function resetCurrentDraw(force = false) {
   try {
-    const resp = await fetch('/api/current-draw/reset', { method: 'POST' });
+    const resp = await fetch('/api/current-draw/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force }),
+    });
+    if (resp.status === 409) {
+      const current = await resp.json();
+      hydrateCurrentDraw(current);
+      return true;
+    }
     if (!resp.ok) throw new Error(await resp.text());
     return true;
   } catch (err) {
