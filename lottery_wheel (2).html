@@ -1194,6 +1194,13 @@ function drawWheel(angle) {
 
 async function startDraw() {
   playClick();
+  const current = await loadCurrentDraw();
+  if (current && current.total > 0 && current.total < 12) {
+    hydrateCurrentDraw(current);
+    showToast('已进入当前抽签轮次');
+    return;
+  }
+
   const resetOk = await resetCurrentDraw();
   if (!resetOk) {
     showToast('✕ 服务器重置失败，请稍后重试');
@@ -1228,6 +1235,53 @@ function updateBanner() {
   document.getElementById('exciteFill').style.width = `${(currentIndex / 12) * 100}%`;
 }
 
+function showPhase(id) {
+  document.querySelectorAll('.phase').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function applyDraws(draws) {
+  names = [];
+  assignedMap = {};
+  usedNumbers = new Set();
+  drawHistory = [];
+  document.getElementById('assignedMini').innerHTML = '';
+
+  draws.forEach((d) => {
+    const name = d.member_name;
+    const num = d.draw_number;
+    names.push(name);
+    assignedMap[num] = name;
+    usedNumbers.add(num);
+    drawHistory.push({ order: d.draw_order, name, number: num });
+    addChip(num, name);
+  });
+}
+
+function hydrateCurrentDraw(data) {
+  const draws = Array.isArray(data.draws) ? data.draws : [];
+  spinAngle = -Math.PI / 2 - Math.PI / N;
+  applyDraws(draws);
+  currentIndex = draws.length;
+
+  if (currentIndex >= 12) {
+    showPhase('phase3');
+    drawWheel(spinAngle);
+    showFinalResults(false);
+    return;
+  }
+
+  showPhase('phase2');
+  const input = document.getElementById('liveNameInput');
+  input.value = '';
+  input.disabled = false;
+  document.getElementById('spinBtn').disabled = true;
+  document.getElementById('nameInputCard').classList.remove('has-name');
+  updateBanner();
+  drawWheel(spinAngle);
+  setTimeout(() => input.focus(), 100);
+}
+
 // ── Spin logic ───────────────────────────────────────────────────────────────
 
 async function spinWheel() {
@@ -1247,6 +1301,10 @@ async function spinWheel() {
     btn.disabled = false;
     document.getElementById('liveNameInput').disabled = false;
     return;
+  }
+
+  if (Array.isArray(spinResult.draws)) {
+    applyDraws(spinResult.draws.filter(d => d.draw_order !== spinResult.draw.draw_order));
   }
 
   const targetNum = spinResult.draw.draw_number;
@@ -1372,12 +1430,12 @@ function addChip(num, name) {
 
 // ── Final results ────────────────────────────────────────────────────────────
 
-async function showFinalResults() {
+async function showFinalResults(showSavedToast = true) {
   document.getElementById('phase2').classList.remove('active');
   document.getElementById('phase3').classList.add('active');
 
   // 每次抽签已由服务器实时保存；第 12 人完成后服务器自动写入历史记录。
-  showToast('✓ 本次抽签已由服务器保存');
+  if (showSavedToast) showToast('✓ 本次抽签已由服务器保存');
 
   const content = document.getElementById('phase3Content');
   content.innerHTML = '';
@@ -1489,6 +1547,7 @@ async function showFinalResults() {
 }
 
 function restart() {
+  resetCurrentDraw();
   assignedMap = {};
   usedNumbers = new Set();
   currentIndex = 0;
@@ -1512,6 +1571,17 @@ async function serverSpin(name) {
   });
   if (!resp.ok) throw new Error(await resp.text());
   return await resp.json();
+}
+
+async function loadCurrentDraw() {
+  try {
+    const resp = await fetch('/api/current-draw');
+    if (!resp.ok) throw new Error(await resp.text());
+    return await resp.json();
+  } catch (err) {
+    console.error('读取当前抽签状态失败:', err);
+    return null;
+  }
 }
 
 async function resetCurrentDraw() {
@@ -1662,6 +1732,9 @@ function launchConfetti(count = 40) {
 // Init
 spinAngle = -Math.PI / 2 - Math.PI / N;
 drawWheel(spinAngle);
+loadCurrentDraw().then((data) => {
+  if (data && data.total > 0) hydrateCurrentDraw(data);
+});
 </script>
 </body>
 </html>
