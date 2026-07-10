@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>幸运抽签系统</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #FFD700;
+    --gold-dark: #B8860B;
+    --neon-blue: #00CFFF;
+    --neon-pink: #FF2D78;
+    --bg: #050A18;
+    --bg2: #0A1428;
+    --card: rgba(255,255,255,0.04);
+    --border: rgba(0,207,255,0.2);
+    --text: #E8F0FF;
+    --text-dim: rgba(232,240,255,0.5);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans SC', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Starfield bg */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(0,80,160,0.15) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(255,45,120,0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 60% 80%, rgba(0,207,255,0.06) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Animated grid */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,207,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,207,255,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    padding: 30px 0 20px;
+  }
+  .header-sub {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 8px;
+    color: var(--neon-blue);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    opacity: 0.8;
+  }
+  .header h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(28px, 5vw, 52px);
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--gold) 0%, #FFF5A0 40%, var(--gold) 60%, var(--gold-dark) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 4px;
+    text-shadow: none;
+    filter: drop-shadow(0 0 30px rgba(255,215,0,0.4));
+    animation: titlePulse 3s ease-in-out infinite;
+  }
+  @keyframes titlePulse {
+    0%, 100% { filter: drop-shadow(0 0 20px rgba(255,215,0,0.3)); }
+    50% { filter: drop-shadow(0 0 50px rgba(255,215,0,0.7)); }
+  }
+  .header-line {
+    width: 200px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 15px auto;
+  }
+
+  /* Phases */
+  .phase { display: none; }
+  .phase.active { display: block; }
+
+  /* ===== PHASE 1: START ===== */
+  .phase1-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+  }
+  .intro-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 40px 50px;
+    width: 100%;
+    max-width: 520px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 0 40px rgba(0,207,255,0.05), inset 0 1px 0 rgba(255,255,255,0.05);
+    text-align: center;
+  }
+  .intro-card h2 {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    letter-spacing: 4px;
+    color: var(--neon-blue);
+    margin-bottom: 24px;
+  }
+  .intro-desc {
+    color: var(--text-dim);
+    font-size: 14px;
+    line-height: 2;
+    margin-bottom: 10px;
+  }
+  .intro-count {
+    font-family: 'Orbitron', monospace;
+    font-size: 48px;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--gold), #FFF5A0, var(--gold));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 20px rgba(255,215,0,0.5));
+    margin: 16px 0;
+  }
+  .intro-hint {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.8;
+    letter-spacing: 1px;
+  }
+
+  .start-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    letter-spacing: 4px;
+    color: var(--bg);
+    background: linear-gradient(135deg, var(--gold), #FFB800);
+    border: none;
+    border-radius: 50px;
+    padding: 16px 50px;
+    cursor: pointer;
+    font-weight: 700;
+    box-shadow: 0 0 30px rgba(255,215,0,0.4), 0 4px 20px rgba(0,0,0,0.5);
+    transition: all 0.3s;
+    text-transform: uppercase;
+  }
+  .start-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 50px rgba(255,215,0,0.6), 0 8px 30px rgba(0,0,0,0.5);
+  }
+  .start-btn:active { transform: translateY(0); }
+
+  /* ===== PHASE 2: SPINNING ===== */
+  .phase2-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  /* Name input card */
+  .name-input-card {
+    text-align: center;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px 36px 14px;
+    backdrop-filter: blur(10px);
+    width: 100%;
+    max-width: 440px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .name-input-card.has-name {
+    border-color: rgba(255,215,0,0.4);
+    box-shadow: 0 0 20px rgba(255,215,0,0.1);
+  }
+  .name-input-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    letter-spacing: 5px;
+    color: var(--neon-blue);
+    opacity: 0.7;
+    margin-bottom: 8px;
+  }
+  .live-name-input {
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(0,207,255,0.3);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    text-align: center;
+    padding: 10px 20px;
+    outline: none;
+    width: 100%;
+    margin: 6px 0;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    letter-spacing: 2px;
+  }
+  .live-name-input:focus {
+    border-color: var(--gold);
+    box-shadow: 0 0 20px rgba(255,215,0,0.25);
+  }
+  .live-name-input::placeholder {
+    color: var(--text-dim);
+    font-weight: 300;
+    font-size: 15px;
+    letter-spacing: 0;
+  }
+  .progress-info {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    letter-spacing: 2px;
+  }
+
+  /* Wheel area */
+  .wheel-area {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .wheel-glow {
+    position: absolute;
+    width: 420px;
+    height: 420px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,207,255,0.08) 0%, transparent 70%);
+    animation: glowPulse 2s ease-in-out infinite;
+  }
+  @keyframes glowPulse {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.05); opacity: 1; }
+  }
+  canvas#wheel {
+    position: relative;
+    z-index: 2;
+    filter: drop-shadow(0 0 20px rgba(0,207,255,0.3));
+    transition: filter 0.3s;
+  }
+  canvas#wheel.spinning {
+    filter: drop-shadow(0 0 40px rgba(255,215,0,0.5));
+  }
+
+  /* Pointer */
+  .pointer-wrap {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    filter: drop-shadow(0 0 10px var(--gold));
+  }
+  .pointer-wrap svg { display: block; }
+
+  /* Result flash */
+  .result-flash {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .result-flash.show { opacity: 1; pointer-events: all; }
+  .result-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(4px);
+  }
+  .result-content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    animation: resultPop 0.5s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  @keyframes resultPop {
+    from { transform: scale(0.5); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  .result-num {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(80px, 15vw, 160px);
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--gold), #FFF5A0, var(--gold));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 30px rgba(255,215,0,0.8));
+    line-height: 1;
+  }
+  .result-name-display {
+    font-size: 28px;
+    color: var(--neon-blue);
+    margin: 10px 0;
+    font-weight: 700;
+    text-shadow: 0 0 20px var(--neon-blue);
+  }
+  .result-tag {
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    letter-spacing: 4px;
+    color: var(--text-dim);
+    margin-bottom: 30px;
+  }
+  .result-next-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--bg);
+    background: linear-gradient(135deg, var(--gold), #FFB800);
+    border: none;
+    border-radius: 50px;
+    padding: 14px 40px;
+    cursor: pointer;
+    font-weight: 700;
+    box-shadow: 0 0 30px rgba(255,215,0,0.4);
+    transition: all 0.3s;
+  }
+  .result-next-btn:hover { transform: scale(1.05); }
+
+  /* Spin button */
+  .spin-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    letter-spacing: 4px;
+    color: var(--bg);
+    background: linear-gradient(135deg, var(--neon-blue), #0090CC);
+    border: none;
+    border-radius: 50px;
+    padding: 14px 40px;
+    cursor: pointer;
+    font-weight: 700;
+    box-shadow: 0 0 30px rgba(0,207,255,0.4);
+    transition: all 0.3s;
+    text-transform: uppercase;
+  }
+  .spin-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 0 50px rgba(0,207,255,0.6);
+  }
+  .spin-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* Assigned list mini */
+  .assigned-mini {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    max-width: 500px;
+  }
+  .assigned-chip {
+    background: rgba(255,215,0,0.1);
+    border: 1px solid rgba(255,215,0,0.3);
+    border-radius: 30px;
+    padding: 4px 14px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    animation: chipIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  @keyframes chipIn {
+    from { transform: scale(0); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  .chip-num {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    color: var(--gold);
+    font-weight: 700;
+  }
+  .chip-name { color: var(--text); }
+
+  /* Excitement bar */
+  .excitement-bar {
+    width: 100%;
+    max-width: 380px;
+    height: 3px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .excitement-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--neon-blue), var(--gold), var(--neon-pink));
+    width: 0%;
+    transition: width 0.4s ease;
+    box-shadow: 0 0 8px var(--gold);
+  }
+
+  /* ===== PHASE 3: RESULTS ===== */
+  .phase3-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+    animation: fadeUp 0.8s ease;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .results-title {
+    text-align: center;
+  }
+  .results-title h2 {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 6px;
+    color: var(--neon-blue);
+    margin-bottom: 8px;
+    opacity: 0.7;
+  }
+  .results-title h3 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--gold);
+  }
+
+  .teams-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    width: 100%;
+    max-width: 900px;
+  }
+  .team-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s, box-shadow 0.3s;
+    animation: cardIn 0.5s ease both;
+  }
+  .team-card:nth-child(1) { animation-delay: 0.1s; }
+  .team-card:nth-child(2) { animation-delay: 0.2s; }
+  .team-card:nth-child(3) { animation-delay: 0.3s; }
+  .team-card:nth-child(4) { animation-delay: 0.4s; }
+  .team-card:nth-child(5) { animation-delay: 0.5s; }
+  .team-card:nth-child(6) { animation-delay: 0.6s; }
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .team-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent, var(--gold)), transparent);
+  }
+  .team-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+  }
+  .team-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .team-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+  }
+  .team-badge {
+    font-family: 'Orbitron', monospace;
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--accent, var(--gold));
+    text-shadow: 0 0 15px currentColor;
+  }
+  .team-members {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .member-tag {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    padding: 6px 12px;
+    flex: 1;
+    min-width: 100px;
+  }
+  .member-num {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    color: var(--accent, var(--gold));
+    font-weight: 700;
+    min-width: 20px;
+  }
+  .member-name { font-size: 14px; }
+
+  /* Schedule */
+  .schedule-wrap {
+    width: 100%;
+    max-width: 900px;
+  }
+  .schedule-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 5px;
+    color: var(--neon-blue);
+    text-align: center;
+    margin-bottom: 16px;
+    opacity: 0.8;
+  }
+  .schedule-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .week-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s;
+  }
+  .week-card:hover { transform: translateY(-3px); }
+  .week-card.highlight {
+    border-color: rgba(255,215,0,0.4);
+    box-shadow: 0 0 30px rgba(255,215,0,0.1);
+  }
+  .week-card.highlight::after {
+    content: '本周';
+    position: absolute;
+    top: 10px; right: 10px;
+    font-family: 'Orbitron', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    background: var(--gold);
+    color: var(--bg);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 700;
+  }
+  .week-num {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .week-label {
+    font-size: 13px;
+    color: var(--neon-blue);
+    margin-bottom: 12px;
+    font-weight: 500;
+  }
+  .week-members {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .week-member {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    text-align: left;
+  }
+  .week-member-num {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    color: var(--gold);
+    min-width: 16px;
+  }
+
+  .restart-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 50px;
+    padding: 12px 30px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+  }
+  .restart-btn:hover {
+    border-color: var(--neon-blue);
+    color: var(--neon-blue);
+  }
+
+  /* Confetti particles */
+  .particle {
+    position: fixed;
+    pointer-events: none;
+    z-index: 200;
+    border-radius: 2px;
+    animation: fall linear forwards;
+  }
+  @keyframes fall {
+    0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+  }
+
+  /* ===== HISTORY PANEL ===== */
+  .hist-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--neon-blue);
+    background: transparent;
+    border: 1px solid rgba(0,207,255,0.3);
+    border-radius: 50px;
+    padding: 10px 24px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+  }
+  .hist-btn:hover {
+    border-color: var(--neon-blue);
+    box-shadow: 0 0 20px rgba(0,207,255,0.2);
+    background: rgba(0,207,255,0.06);
+  }
+
+  .hist-panel {
+    position: fixed;
+    top: 0; right: 0;
+    width: min(420px, 100vw);
+    height: 100vh;
+    background: #050e20;
+    border-left: 1px solid rgba(0,207,255,0.2);
+    box-shadow: -10px 0 60px rgba(0,0,0,0.7);
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+    overflow: hidden;
+  }
+  .hist-panel.open { transform: translateX(0); }
+
+  .hist-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 299;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s;
+  }
+  .hist-backdrop.open { opacity: 1; pointer-events: all; }
+
+  .hist-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid rgba(0,207,255,0.12);
+    flex-shrink: 0;
+  }
+  .hist-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 5px;
+    color: var(--neon-blue);
+  }
+  .hist-close {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-dim); font-size: 20px; padding: 4px 8px;
+    transition: color 0.2s;
+  }
+  .hist-close:hover { color: var(--text); }
+
+  .hist-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,207,255,0.2) transparent;
+  }
+  .hist-empty {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-top: 60px;
+    letter-spacing: 1px;
+    line-height: 2;
+  }
+
+  .sess-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: border-color 0.25s, background 0.25s;
+  }
+  .sess-card:hover { border-color: rgba(0,207,255,0.45); background: rgba(0,207,255,0.04); }
+  .sess-card.expanded { border-color: rgba(255,215,0,0.35); }
+
+  .sess-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .sess-date {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    color: var(--neon-blue);
+    letter-spacing: 1px;
+  }
+  .sess-members {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+  .sess-chevron {
+    font-size: 12px;
+    color: var(--text-dim);
+    transition: transform 0.25s;
+    flex-shrink: 0;
+  }
+  .sess-card.expanded .sess-chevron { transform: rotate(90deg); }
+
+  .sess-note {
+    font-size: 12px;
+    color: var(--gold);
+    margin-top: 6px;
+    font-style: italic;
+    letter-spacing: 1px;
+  }
+
+  .sess-draws {
+    display: none;
+    margin-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 10px;
+  }
+  .sess-card.expanded .sess-draws { display: block; }
+
+  .draw-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .draw-row:last-child { border-bottom: none; }
+  .draw-order { color: var(--text-dim); min-width: 28px; font-family: 'Orbitron', monospace; font-size: 10px; }
+  .draw-num { color: var(--gold); font-family: 'Orbitron', monospace; font-size: 11px; min-width: 28px; }
+  .draw-name { color: var(--text); }
+
+  .sess-del-btn {
+    margin-top: 10px;
+    font-family: 'Orbitron', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: rgba(255,45,120,0.6);
+    background: none;
+    border: 1px solid rgba(255,45,120,0.2);
+    border-radius: 30px;
+    padding: 4px 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .sess-del-btn:hover { color: var(--neon-pink); border-color: var(--neon-pink); }
+
+  /* Save toast */
+  .save-toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: rgba(10,30,60,0.95);
+    border: 1px solid rgba(0,207,255,0.35);
+    border-radius: 50px;
+    padding: 10px 28px;
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--neon-blue);
+    z-index: 400;
+    opacity: 0;
+    transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1), opacity 0.4s;
+    white-space: nowrap;
+  }
+  .save-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Tension effects */
+  @keyframes tensionShake {
+    0%, 100% { transform: translateX(0); }
+    10% { transform: translateX(-3px); }
+    30% { transform: translateX(3px); }
+    50% { transform: translateX(-2px); }
+    70% { transform: translateX(2px); }
+  }
+  .shaking { animation: tensionShake 0.1s infinite; }
+
+  @keyframes tensionGlow {
+    0%, 100% { box-shadow: 0 0 20px rgba(255,45,120,0.3); }
+    50% { box-shadow: 0 0 60px rgba(255,45,120,0.8); }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="header-sub">Lucky Draw System</div>
+    <h1>幸运抽签</h1>
+    <div class="header-line"></div>
+  </div>
+
+  <!-- Phase 1: Start Screen -->
+  <div class="phase active" id="phase1">
+    <div class="phase1-layout">
+      <div class="intro-card">
+        <h2>✦ 幸运抽签系统 ✦</h2>
+        <div class="intro-count">12</div>
+        <div class="intro-desc">共 12 位成员参与抽签</div>
+        <div class="intro-hint">
+          每人依次上前输入姓名<br>
+          转动转盘抽取对应编号<br>
+          完成随机分组安排
+        </div>
+      </div>
+      <button class="start-btn" onclick="startDraw()">开始抽签</button>
+      <button class="hist-btn" onclick="openHistory()">📋 历史记录</button>
+    </div>
+  </div>
+
+  <!-- Phase 2: Spin -->
+  <div class="phase" id="phase2">
+    <div class="phase2-layout">
+
+      <!-- Name input card -->
+      <div class="name-input-card" id="nameInputCard">
+        <div class="name-input-label" id="nameInputLabel">▸ 第 1 位成员，请输入您的姓名 ▸</div>
+        <input
+          type="text"
+          id="liveNameInput"
+          class="live-name-input"
+          placeholder="输入姓名后点击转动…"
+          oninput="onNameInput()"
+          onkeydown="onNameKeydown(event)"
+          autocomplete="off"
+          maxlength="12"
+        >
+        <div class="progress-info" id="progressInfo">0 / 12 已完成</div>
+      </div>
+
+      <div class="excitement-bar"><div class="excitement-fill" id="exciteFill"></div></div>
+
+      <div class="wheel-area">
+        <div class="wheel-glow"></div>
+        <div class="pointer-wrap">
+          <svg width="30" height="40" viewBox="0 0 30 40">
+            <polygon points="15,38 1,2 29,2" fill="#FFD700" opacity="0.95"/>
+            <polygon points="15,36 3,4 27,4" fill="url(#pg)" opacity="0.4"/>
+            <defs>
+              <linearGradient id="pg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="white"/>
+                <stop offset="100%" stop-color="transparent"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <canvas id="wheel" width="380" height="380"></canvas>
+      </div>
+
+      <button class="spin-btn" id="spinBtn" onclick="spinWheel()" disabled>▶ 开始转动</button>
+      <div class="assigned-mini" id="assignedMini"></div>
+    </div>
+  </div>
+
+  <!-- Phase 3: Results -->
+  <div class="phase" id="phase3">
+    <div class="phase3-layout" id="phase3Content"></div>
+  </div>
+</div>
+
+<!-- History Backdrop -->
+<div class="hist-backdrop" id="histBackdrop" onclick="closeHistory()"></div>
+
+<!-- History Panel -->
+<div class="hist-panel" id="histPanel">
+  <div class="hist-header">
+    <div class="hist-title">◈ 抽签历史记录 ◈</div>
+    <button class="hist-close" onclick="closeHistory()">✕</button>
+  </div>
+  <div class="hist-body" id="histBody">
+    <div class="hist-empty" id="histEmpty">暂无历史记录<br><span style="font-size:11px;opacity:0.5">完成一次抽签后自动保存</span></div>
+  </div>
+</div>
+
+<!-- Save Toast -->
+<div class="save-toast" id="saveToast"></div>
+
+<!-- Result Flash Overlay -->
+<div class="result-flash" id="resultFlash">
+  <div class="result-overlay"></div>
+  <div class="result-content">
+    <div class="result-tag">DRAW RESULT</div>
+    <div class="result-num" id="flashNum">7</div>
+    <div class="result-name-display" id="flashName">姓名</div>
+    <button class="result-next-btn" id="flashBtn" onclick="nextDraw()">继续抽签 ▶</button>
+  </div>
+</div>
+
+<script>
+const TEAM_COLORS = ['#FFD700','#00CFFF','#FF2D78','#A0FF60','#FF9000','#C084FC'];
+
+// ── Audio Engine ──────────────────────────────────────────────────────────────
+let audioCtx = null;
+let lastTickSeg = -1;
+let tensionPlayed = false;
+
+function getAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  // Resume if suspended (browser autoplay policy)
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function playClick() {
+  const a = getAudio(); if (!a) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.connect(g); g.connect(a.destination);
+  o.type = 'sine'; o.frequency.value = 660;
+  g.gain.setValueAtTime(0.18, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.08);
+  o.start(); o.stop(a.currentTime + 0.08);
+}
+
+function playTick(speed) {
+  const a = getAudio(); if (!a) return;
+  const freq = 300 + Math.min(speed * 1800, 900);
+  const vol  = 0.10 + Math.min(speed * 0.25, 0.22);
+  const dur  = 0.025 + Math.max(0.055 - speed * 0.08, 0);
+  const o = a.createOscillator(), g = a.createGain();
+  o.connect(g); g.connect(a.destination);
+  o.type = 'triangle'; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+  o.start(); o.stop(a.currentTime + dur);
+}
+
+function playSpinStart() {
+  const a = getAudio(); if (!a) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.connect(g); g.connect(a.destination);
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(120, a.currentTime);
+  o.frequency.exponentialRampToValueAtTime(700, a.currentTime + 0.28);
+  g.gain.setValueAtTime(0.18, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.28);
+  o.start(); o.stop(a.currentTime + 0.28);
+}
+
+function playTensionRise() {
+  const a = getAudio(); if (!a) return;
+  // Low rumble swelling up
+  const o = a.createOscillator(), g = a.createGain();
+  o.connect(g); g.connect(a.destination);
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(55, a.currentTime);
+  o.frequency.linearRampToValueAtTime(180, a.currentTime + 1.6);
+  g.gain.setValueAtTime(0.04, a.currentTime);
+  g.gain.linearRampToValueAtTime(0.16, a.currentTime + 1.0);
+  g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 1.8);
+  o.start(); o.stop(a.currentTime + 1.8);
+  // High shimmer on top
+  const o2 = a.createOscillator(), g2 = a.createGain();
+  o2.connect(g2); g2.connect(a.destination);
+  o2.type = 'sine'; o2.frequency.value = 1200;
+  g2.gain.setValueAtTime(0.0, a.currentTime + 0.6);
+  g2.gain.linearRampToValueAtTime(0.08, a.currentTime + 1.2);
+  g2.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 1.8);
+  o2.start(a.currentTime + 0.6); o2.stop(a.currentTime + 1.8);
+}
+
+function playWinFanfare() {
+  const a = getAudio(); if (!a) return;
+  // Ascending arpeggio C-E-G-C-E (major triad)
+  [[523.25,0],[659.25,0.10],[783.99,0.20],[1046.5,0.32],[1318.5,0.44]].forEach(([f,t]) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination);
+    o.type = 'sine'; o.frequency.value = f;
+    const st = a.currentTime + t;
+    g.gain.setValueAtTime(0.001, st);
+    g.gain.linearRampToValueAtTime(0.38, st + 0.025);
+    g.gain.exponentialRampToValueAtTime(0.001, st + 0.5);
+    o.start(st); o.stop(st + 0.5);
+  });
+  // Sustained background chord
+  [523.25, 659.25, 783.99].forEach(f => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination);
+    o.type = 'triangle'; o.frequency.value = f;
+    g.gain.setValueAtTime(0.07, a.currentTime + 0.35);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 1.4);
+    o.start(a.currentTime + 0.35); o.stop(a.currentTime + 1.4);
+  });
+}
+
+let names = [];          // names[i] = name of person who drew on turn i
+let assignedMap = {};    // number -> name
+let usedNumbers = new Set();
+let drawHistory = [];    // [{order, name, number}] – mirrors API payload
+let currentIndex = 0;
+let spinAngle = 0;
+let animId = null;
+
+// Canvas wheel
+const canvas = document.getElementById('wheel');
+const ctx = canvas.getContext('2d');
+const N = 12;
+const CX = canvas.width / 2;
+const CY = canvas.height / 2;
+const R = CX - 10;
+
+// ── Name input handling ──────────────────────────────────────────────────────
+
+function onNameInput() {
+  const val = document.getElementById('liveNameInput').value.trim();
+  const btn = document.getElementById('spinBtn');
+  const card = document.getElementById('nameInputCard');
+  btn.disabled = val.length === 0;
+  if (val.length > 0) {
+    card.classList.add('has-name');
+  } else {
+    card.classList.remove('has-name');
+  }
+}
+
+function onNameKeydown(e) {
+  if (e.key === 'Enter') {
+    const val = document.getElementById('liveNameInput').value.trim();
+    if (val.length > 0) spinWheel();
+  }
+}
+
+// ── Wheel drawing ────────────────────────────────────────────────────────────
+
+function drawWheel(angle) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const slice = (2 * Math.PI) / N;
+
+  // Outer ring glow
+  ctx.save();
+  ctx.shadowBlur = 20;
+  ctx.shadowColor = 'rgba(0,207,255,0.4)';
+  ctx.strokeStyle = 'rgba(0,207,255,0.3)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(CX, CY, R + 4, 0, 2 * Math.PI);
+  ctx.stroke();
+  ctx.restore();
+
+  for (let i = 0; i < N; i++) {
+    const startAngle = angle + i * slice;
+    const endAngle = startAngle + slice;
+    const num = i + 1;
+    const isUsed = usedNumbers.has(num);
+
+    // Segment fill
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(CX, CY);
+    ctx.arc(CX, CY, R, startAngle, endAngle);
+    ctx.closePath();
+
+    if (isUsed) {
+      ctx.fillStyle = '#060C1A';
+    } else {
+      const grad = ctx.createRadialGradient(CX, CY, 0, CX, CY, R);
+      grad.addColorStop(0, '#1A2B6A');
+      grad.addColorStop(1, i % 2 === 0 ? '#0D1A40' : '#111E4A');
+      ctx.fillStyle = grad;
+    }
+    ctx.fill();
+
+    // Sector border
+    ctx.strokeStyle = isUsed ? 'rgba(255,255,255,0.03)' : 'rgba(0,207,255,0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // Number text — only draw if NOT used
+    if (!isUsed) {
+      ctx.save();
+      ctx.translate(CX, CY);
+      ctx.rotate(startAngle + slice / 2);
+      ctx.textAlign = 'right';
+      ctx.font = `bold 22px Orbitron, monospace`;
+      ctx.fillStyle = '#FFD700';
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = 'rgba(255,215,0,0.6)';
+      ctx.fillText(num, R - 16, 8);
+      ctx.restore();
+
+      // Dot on rim
+      ctx.save();
+      ctx.translate(CX, CY);
+      ctx.rotate(startAngle + slice / 2);
+      ctx.beginPath();
+      ctx.arc(R - 6, 0, 3, 0, 2 * Math.PI);
+      ctx.fillStyle = '#FFD700';
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#FFD700';
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Center circle
+  ctx.save();
+  const cGrad = ctx.createRadialGradient(CX, CY, 0, CX, CY, 38);
+  cGrad.addColorStop(0, '#1E3080');
+  cGrad.addColorStop(1, '#0A1028');
+  ctx.beginPath();
+  ctx.arc(CX, CY, 38, 0, 2 * Math.PI);
+  ctx.fillStyle = cGrad;
+  ctx.strokeStyle = 'rgba(0,207,255,0.5)';
+  ctx.lineWidth = 2;
+  ctx.shadowBlur = 15;
+  ctx.shadowColor = 'rgba(0,207,255,0.4)';
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  // Center star
+  ctx.save();
+  ctx.font = '22px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#FFD700';
+  ctx.shadowBlur = 10;
+  ctx.shadowColor = 'rgba(255,215,0,0.8)';
+  ctx.fillText('★', CX, CY);
+  ctx.restore();
+}
+
+// ── Game flow ────────────────────────────────────────────────────────────────
+
+function startDraw() {
+  playClick();
+  names = [];
+  assignedMap = {};
+  usedNumbers = new Set();
+  drawHistory = [];
+  currentIndex = 0;
+  spinAngle = -Math.PI / 2 - Math.PI / N;
+
+  document.getElementById('phase1').classList.remove('active');
+  document.getElementById('phase2').classList.add('active');
+  document.getElementById('assignedMini').innerHTML = '';
+  document.getElementById('liveNameInput').value = '';
+  document.getElementById('spinBtn').disabled = true;
+  document.getElementById('nameInputCard').classList.remove('has-name');
+
+  updateBanner();
+  drawWheel(spinAngle);
+
+  // Auto-focus the name input
+  setTimeout(() => document.getElementById('liveNameInput').focus(), 100);
+}
+
+function updateBanner() {
+  document.getElementById('nameInputLabel').textContent =
+    `▸ 第 ${currentIndex + 1} 位成员，请输入您的姓名 ▸`;
+  document.getElementById('progressInfo').textContent =
+    `${currentIndex} / 12 已完成`;
+  document.getElementById('exciteFill').style.width = `${(currentIndex / 12) * 100}%`;
+}
+
+// ── Spin logic ───────────────────────────────────────────────────────────────
+
+function spinWheel() {
+  const nameVal = document.getElementById('liveNameInput').value.trim();
+  if (!nameVal) return;
+
+  const btn = document.getElementById('spinBtn');
+  btn.disabled = true;
+  document.getElementById('liveNameInput').disabled = true;
+
+  // Pick a random available number
+  const available = [];
+  for (let i = 1; i <= N; i++) if (!usedNumbers.has(i)) available.push(i);
+  const targetNum = available[Math.floor(Math.random() * available.length)];
+
+  // ── Accurate angle calculation ──
+  // Segment i (num = i+1) center is at: spinAngle + i*slice + slice/2
+  // To land at pointer (top = -PI/2), we need:
+  //   spinAngle_final + (targetNum-1)*slice + slice/2 ≡ -PI/2  (mod 2π)
+  //   => spinAngle_final ≡ -PI/2 - (targetNum-1)*slice - slice/2  (mod 2π)
+
+  const slice = (2 * Math.PI) / N;
+  const desiredAngle = -Math.PI / 2 - (targetNum - 1) * slice - slice / 2;
+
+  // Smallest positive delta from current spinAngle to desiredAngle
+  let delta = ((desiredAngle - spinAngle) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+  if (delta < 0.05) delta += 2 * Math.PI; // guarantee at least a tiny arc
+
+  // Add 5–8 full extra rotations for drama
+  const extraRotations = 5 + Math.floor(Math.random() * 4);
+  const targetFinal = spinAngle + extraRotations * 2 * Math.PI + delta;
+
+  const duration = 4000 + Math.random() * 1500;
+  const startAngle = spinAngle;
+  const startTime = performance.now();
+
+  canvas.classList.add('spinning');
+  let shakePhase = false;
+  lastTickSeg = -1;
+  tensionPlayed = false;
+  playSpinStart();
+
+  function easeOut(t) {
+    return 1 - Math.pow(1 - t, 4);
+  }
+
+  function animate(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    const eased = easeOut(t);
+    spinAngle = startAngle + (targetFinal - startAngle) * eased;
+    drawWheel(spinAngle);
+
+    // ── Tick sound when pointer crosses a new segment ──
+    const slice2 = (2 * Math.PI) / N;
+    const relAngle = ((-Math.PI / 2 - spinAngle) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+    const currentSeg = Math.floor(relAngle / slice2) % N;
+    if (currentSeg !== lastTickSeg) {
+      const speed = (1 - t); // 1=fast, 0=slow
+      playTick(speed);
+      lastTickSeg = currentSeg;
+    }
+
+    if (t > 0.75 && t < 0.95 && !shakePhase) {
+      shakePhase = true;
+      if (!tensionPlayed) { tensionPlayed = true; playTensionRise(); }
+      canvas.classList.add('shaking');
+      canvas.style.animation = 'tensionShake 0.08s infinite';
+    }
+    if (t >= 0.95) {
+      canvas.style.animation = '';
+      canvas.classList.remove('shaking');
+    }
+
+    if (t < 1) {
+      animId = requestAnimationFrame(animate);
+    } else {
+      spinAngle = targetFinal;
+      drawWheel(spinAngle);
+      canvas.classList.remove('spinning');
+
+      // Record result
+      names.push(nameVal);
+      assignedMap[targetNum] = nameVal;
+      usedNumbers.add(targetNum);
+      drawHistory.push({ order: currentIndex, name: nameVal, number: targetNum });
+
+      // Redraw wheel with this number now removed
+      drawWheel(spinAngle);
+
+      showResult(targetNum, nameVal);
+      addChip(targetNum, nameVal);
+    }
+  }
+  animId = requestAnimationFrame(animate);
+}
+
+function showResult(num, name) {
+  playWinFanfare();
+  document.getElementById('flashNum').textContent = num;
+  document.getElementById('flashName').textContent = name;
+  const isLast = currentIndex === 11;
+  document.getElementById('flashBtn').textContent = isLast ? '查看分组结果 ▶' : '继续抽签 ▶';
+  document.getElementById('resultFlash').classList.add('show');
+  launchConfetti();
+}
+
+function nextDraw() {
+  playClick();
+  document.getElementById('resultFlash').classList.remove('show');
+  currentIndex++;
+  if (currentIndex >= 12) {
+    showFinalResults();
+  } else {
+    updateBanner();
+    // Reset name input for next person
+    const input = document.getElementById('liveNameInput');
+    input.value = '';
+    input.disabled = false;
+    document.getElementById('nameInputCard').classList.remove('has-name');
+    document.getElementById('spinBtn').disabled = true;
+    setTimeout(() => input.focus(), 150);
+  }
+}
+
+function addChip(num, name) {
+  const mini = document.getElementById('assignedMini');
+  const chip = document.createElement('div');
+  chip.className = 'assigned-chip';
+  chip.innerHTML = `<span class="chip-num">#${num}</span><span class="chip-name">${name}</span>`;
+  mini.appendChild(chip);
+}
+
+// ── Final results ────────────────────────────────────────────────────────────
+
+async function showFinalResults() {
+  document.getElementById('phase2').classList.remove('active');
+  document.getElementById('phase3').classList.add('active');
+
+  // ── Auto-save to SQLite ──
+  const saved = await saveSession();
+  if (saved && saved.success) {
+    showToast('✓ 本次抽签已自动保存');
+  }
+
+  const content = document.getElementById('phase3Content');
+  content.innerHTML = '';
+
+  const titleDiv = document.createElement('div');
+  titleDiv.className = 'results-title';
+  titleDiv.innerHTML = `<h2>✦ DRAW COMPLETE ✦</h2><h3>抽签结果与分组安排</h3>`;
+  content.appendChild(titleDiv);
+
+  const teams = [];
+  for (let t = 0; t < 6; t++) {
+    const n1 = t * 2 + 1;
+    const n2 = t * 2 + 2;
+    teams.push({
+      id: t + 1,
+      members: [
+        { num: n1, name: assignedMap[n1] || '—' },
+        { num: n2, name: assignedMap[n2] || '—' }
+      ]
+    });
+  }
+
+  const teamsTitle = document.createElement('div');
+  teamsTitle.className = 'schedule-title';
+  teamsTitle.textContent = '◈ 分组名单 ◈';
+  content.appendChild(teamsTitle);
+
+  const grid = document.createElement('div');
+  grid.className = 'teams-grid';
+  teams.forEach((team, i) => {
+    const card = document.createElement('div');
+    card.className = 'team-card';
+    card.style.setProperty('--accent', TEAM_COLORS[i]);
+    card.innerHTML = `
+      <div class="team-header">
+        <span class="team-label">GROUP</span>
+        <span class="team-badge">第 ${team.id} 组</span>
+      </div>
+      <div class="team-members">
+        ${team.members.map(m => `
+          <div class="member-tag">
+            <span class="member-num">#${m.num}</span>
+            <span class="member-name">${m.name}</span>
+          </div>`).join('')}
+      </div>`;
+    grid.appendChild(card);
+  });
+  content.appendChild(grid);
+
+  const scheduleData = [
+    { week: '第一周', groups: [teams[0], teams[1]], color: TEAM_COLORS[0] },
+    { week: '第二周', groups: [teams[2], teams[3]], color: TEAM_COLORS[2] },
+    { week: '第三周', groups: [teams[4], teams[5]], color: TEAM_COLORS[4] },
+  ];
+
+  const schedTitle = document.createElement('div');
+  schedTitle.className = 'schedule-title';
+  schedTitle.style.marginTop = '10px';
+  schedTitle.textContent = '◈ 三周轮次排班表 ◈';
+  content.appendChild(schedTitle);
+
+  const schedWrap = document.createElement('div');
+  schedWrap.className = 'schedule-wrap';
+
+  const scheduleGrid = document.createElement('div');
+  scheduleGrid.className = 'schedule-grid';
+  scheduleData.forEach((week, wi) => {
+    const wCard = document.createElement('div');
+    wCard.className = 'week-card' + (wi === 0 ? ' highlight' : '');
+    wCard.style.borderTopColor = week.color;
+
+    const allMembers = [...week.groups[0].members, ...week.groups[1].members];
+    wCard.innerHTML = `
+      <div class="week-num">${week.week} WEEK ${wi + 1}</div>
+      <div class="week-label" style="color:${week.color}">
+        第${week.groups[0].id}组 + 第${week.groups[1].id}组 促销
+      </div>
+      <div class="week-members">
+        ${allMembers.map(m => `
+          <div class="week-member">
+            <span class="week-member-num">#${m.num}</span>
+            <span>${m.name}</span>
+          </div>`).join('')}
+      </div>`;
+    scheduleGrid.appendChild(wCard);
+  });
+  schedWrap.appendChild(scheduleGrid);
+
+  const cycleNote = document.createElement('div');
+  cycleNote.style.cssText = 'text-align:center;margin-top:14px;font-size:12px;color:rgba(232,240,255,0.4);font-family:Orbitron,monospace;letter-spacing:3px;';
+  cycleNote.textContent = '↻  三周为一轮次，循环排班';
+  schedWrap.appendChild(cycleNote);
+  content.appendChild(schedWrap);
+
+  const restartBtn = document.createElement('button');
+  restartBtn.className = 'restart-btn';
+  restartBtn.textContent = '↺  重新抽签';
+  restartBtn.onclick = restart;
+  content.appendChild(restartBtn);
+
+  const histBtn = document.createElement('button');
+  histBtn.className = 'hist-btn';
+  histBtn.style.marginTop = '4px';
+  histBtn.textContent = '📋 查看历史记录';
+  histBtn.onclick = openHistory;
+  content.appendChild(histBtn);
+
+  launchConfetti(80);
+}
+
+function restart() {
+  assignedMap = {};
+  usedNumbers = new Set();
+  currentIndex = 0;
+  names = [];
+  drawHistory = [];
+  spinAngle = -Math.PI / 2 - Math.PI / N;
+  document.getElementById('phase3').classList.remove('active');
+  document.getElementById('phase1').classList.add('active');
+  document.getElementById('assignedMini').innerHTML = '';
+  document.getElementById('spinBtn').disabled = true;
+  drawWheel(spinAngle);
+}
+
+// ── Persistence API ──────────────────────────────────────────────────────────
+
+async function saveSession(note = '') {
+  if (drawHistory.length === 0) return null;
+  try {
+    const resp = await fetch('/api/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ draws: drawHistory, note: note || null }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return await resp.json();
+  } catch (err) {
+    console.error('保存抽签记录失败:', err);
+    return null;
+  }
+}
+
+async function loadHistory() {
+  try {
+    const resp = await fetch('/api/sessions');
+    if (!resp.ok) throw new Error(await resp.text());
+    return await resp.json();   // { total, sessions: [...] }
+  } catch (err) {
+    console.error('查询历史记录失败:', err);
+    return null;
+  }
+}
+
+async function deleteSession(id) {
+  try {
+    const resp = await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
+    if (!resp.ok) throw new Error(await resp.text());
+    return true;
+  } catch (err) {
+    console.error('删除失败:', err);
+    return false;
+  }
+}
+
+// ── History panel ─────────────────────────────────────────────────────────────
+
+function showToast(msg) {
+  const el = document.getElementById('saveToast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+async function openHistory() {
+  document.getElementById('histPanel').classList.add('open');
+  document.getElementById('histBackdrop').classList.add('open');
+  await refreshHistoryPanel();
+}
+
+function closeHistory() {
+  document.getElementById('histPanel').classList.remove('open');
+  document.getElementById('histBackdrop').classList.remove('open');
+}
+
+async function refreshHistoryPanel() {
+  const body = document.getElementById('histBody');
+  const empty = document.getElementById('histEmpty');
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim);font-size:12px;letter-spacing:2px;">加载中…</div>';
+
+  const data = await loadHistory();
+  body.innerHTML = '';
+
+  if (!data || data.sessions.length === 0) {
+    body.innerHTML = '<div class="hist-empty">暂无历史记录<br><span style="font-size:11px;opacity:0.5">完成一次抽签后自动保存</span></div>';
+    return;
+  }
+
+  const countBar = document.createElement('div');
+  countBar.style.cssText = 'font-family:Orbitron,monospace;font-size:10px;letter-spacing:3px;color:var(--text-dim);margin-bottom:14px;';
+  countBar.textContent = `共 ${data.total} 次记录`;
+  body.appendChild(countBar);
+
+  data.sessions.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'sess-card';
+    card.dataset.sessId = s.id;
+
+    const noteHtml = s.note ? `<div class="sess-note">${s.note}</div>` : '';
+    const drawsHtml = (s.draws || []).map(d =>
+      `<div class="draw-row">
+        <span class="draw-order">#${d.draw_order + 1}</span>
+        <span class="draw-num">${d.draw_number}</span>
+        <span class="draw-name">${d.member_name}</span>
+      </div>`
+    ).join('');
+
+    card.innerHTML = `
+      <div class="sess-meta" onclick="toggleSession(this.closest('.sess-card'))">
+        <div>
+          <div class="sess-date">${s.created_at.replace('T',' ').substring(0,16)}</div>
+          ${noteHtml}
+        </div>
+        <span class="sess-members">${s.total_members} 人</span>
+        <span class="sess-chevron">▶</span>
+      </div>
+      <div class="sess-draws">${drawsHtml}
+        <button class="sess-del-btn" onclick="handleDelete(${s.id}, this.closest('.sess-card'))">✕ 删除此记录</button>
+      </div>`;
+    body.appendChild(card);
+  });
+}
+
+function toggleSession(card) {
+  card.classList.toggle('expanded');
+}
+
+async function handleDelete(id, card) {
+  if (!confirm('确认删除这条记录？')) return;
+  const ok = await deleteSession(id);
+  if (ok) {
+    card.style.transition = 'opacity 0.3s, max-height 0.3s';
+    card.style.opacity = '0';
+    card.style.maxHeight = card.offsetHeight + 'px';
+    requestAnimationFrame(() => { card.style.maxHeight = '0'; card.style.padding = '0'; });
+    setTimeout(() => card.remove(), 350);
+    showToast('✓ 已删除');
+  } else {
+    showToast('✕ 删除失败');
+  }
+}
+
+// ── Confetti ─────────────────────────────────────────────────────────────────
+
+function launchConfetti(count = 40) {
+  const colors = ['#FFD700','#00CFFF','#FF2D78','#A0FF60','#C084FC','#FF9000'];
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'particle';
+      el.style.cssText = `
+        left: ${Math.random() * 100}vw;
+        top: -10px;
+        width: ${4 + Math.random() * 6}px;
+        height: ${4 + Math.random() * 6}px;
+        background: ${colors[Math.floor(Math.random() * colors.length)]};
+        animation-duration: ${1.5 + Math.random() * 2}s;
+        animation-delay: ${Math.random() * 0.5}s;
+        opacity: 1;
+        transform: rotate(${Math.random() * 360}deg);
+      `;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 4000);
+    }, i * 30);
+  }
+}
+
+// Init
+spinAngle = -Math.PI / 2 - Math.PI / N;
+drawWheel(spinAngle);
+</script>
+</body>
+</html>
