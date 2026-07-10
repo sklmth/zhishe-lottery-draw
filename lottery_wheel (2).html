@@ -1192,8 +1192,13 @@ function drawWheel(angle) {
 
 // ── Game flow ────────────────────────────────────────────────────────────────
 
-function startDraw() {
+async function startDraw() {
   playClick();
+  const resetOk = await resetCurrentDraw();
+  if (!resetOk) {
+    showToast('✕ 服务器重置失败，请稍后重试');
+    return;
+  }
   names = [];
   assignedMap = {};
   usedNumbers = new Set();
@@ -1225,7 +1230,7 @@ function updateBanner() {
 
 // ── Spin logic ───────────────────────────────────────────────────────────────
 
-function spinWheel() {
+async function spinWheel() {
   const nameVal = document.getElementById('liveNameInput').value.trim();
   if (!nameVal) return;
 
@@ -1233,10 +1238,19 @@ function spinWheel() {
   btn.disabled = true;
   document.getElementById('liveNameInput').disabled = true;
 
-  // Pick a random available number
-  const available = [];
-  for (let i = 1; i <= N; i++) if (!usedNumbers.has(i)) available.push(i);
-  const targetNum = available[Math.floor(Math.random() * available.length)];
+  let spinResult;
+  try {
+    spinResult = await serverSpin(nameVal);
+  } catch (err) {
+    console.error('服务器抽签失败:', err);
+    showToast('✕ 服务器抽签失败，请重试');
+    btn.disabled = false;
+    document.getElementById('liveNameInput').disabled = false;
+    return;
+  }
+
+  const targetNum = spinResult.draw.draw_number;
+  currentIndex = spinResult.draw.draw_order;
 
   // ── Accurate angle calculation ──
   // Segment i (num = i+1) center is at: spinAngle + i*slice + slice/2
@@ -1304,7 +1318,7 @@ function spinWheel() {
       drawWheel(spinAngle);
       canvas.classList.remove('spinning');
 
-      // Record result
+      // Record server-confirmed result
       names.push(nameVal);
       assignedMap[targetNum] = nameVal;
       usedNumbers.add(targetNum);
@@ -1362,11 +1376,8 @@ async function showFinalResults() {
   document.getElementById('phase2').classList.remove('active');
   document.getElementById('phase3').classList.add('active');
 
-  // ── Auto-save to SQLite ──
-  const saved = await saveSession();
-  if (saved && saved.success) {
-    showToast('✓ 本次抽签已自动保存');
-  }
+  // 每次抽签已由服务器实时保存；第 12 人完成后服务器自动写入历史记录。
+  showToast('✓ 本次抽签已由服务器保存');
 
   const content = document.getElementById('phase3Content');
   content.innerHTML = '';
@@ -1493,19 +1504,24 @@ function restart() {
 
 // ── Persistence API ──────────────────────────────────────────────────────────
 
-async function saveSession(note = '') {
-  if (drawHistory.length === 0) return null;
+async function serverSpin(name) {
+  const resp = await fetch('/api/current-draw/spin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!resp.ok) throw new Error(await resp.text());
+  return await resp.json();
+}
+
+async function resetCurrentDraw() {
   try {
-    const resp = await fetch('/api/sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ draws: drawHistory, note: note || null }),
-    });
+    const resp = await fetch('/api/current-draw/reset', { method: 'POST' });
     if (!resp.ok) throw new Error(await resp.text());
-    return await resp.json();
+    return true;
   } catch (err) {
-    console.error('保存抽签记录失败:', err);
-    return null;
+    console.error('重置实时抽签失败:', err);
+    return false;
   }
 }
 

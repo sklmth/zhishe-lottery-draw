@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'lottery.db');
 
 // ── Database setup ────────────────────────────────────────────────────────────
@@ -32,6 +33,15 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_draws_session ON draws(session_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_draws_session_number ON draws(session_id, draw_number);
+
+  CREATE TABLE IF NOT EXISTS active_draws (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    draw_order  INTEGER NOT NULL UNIQUE,
+    member_name TEXT    NOT NULL,
+    draw_number INTEGER NOT NULL UNIQUE,
+    created_at   DATETIME DEFAULT (datetime('now','localtime'))
+  );
 `);
 
 // ── Prepared statements ───────────────────────────────────────────────────────
@@ -53,6 +63,14 @@ const stmts = {
   getDraws:      db.prepare(
     'SELECT draw_order, member_name, draw_number FROM draws WHERE session_id = ? ORDER BY draw_order'
   ),
+  listActiveDraws: db.prepare(
+    'SELECT draw_order, member_name, draw_number FROM active_draws ORDER BY draw_order'
+  ),
+  countActiveDraws: db.prepare('SELECT COUNT(*) AS cnt FROM active_draws'),
+  insertActiveDraw: db.prepare(
+    'INSERT INTO active_draws (draw_order, member_name, draw_number) VALUES (?, ?, ?)'
+  ),
+  clearActiveDraws: db.prepare('DELETE FROM active_draws'),
 };
 
 // ── Express app ───────────────────────────────────────────────────────────────
@@ -67,11 +85,96 @@ app.get('/', (_req, res) => {
   );
 });
 
+function activePayload() {
+  const draws = stmts.listActiveDraws.all();
+  return {
+    total: draws.length,
+    remaining: Math.max(0, 12 - draws.length),
+    draws,
+  };
+}
+
+function persistCompletedActiveSession() {
+  const active = stmts.listActiveDraws.all();
+  if (active.length !== 12) return null;
+
+  const { lastInsertRowid: sessionId } = stmts.insertSession.run(
+    active.length,
+    '服务器实时抽签自动保存'
+  );
+  for (const d of active) {
+    stmts.insertDraw.run(sessionId, d.draw_order, d.member_name, d.draw_number);
+  }
+  return stmts.getSession.get(sessionId);
+}
+
+// ── Server-side live draw state ───────────────────────────────────────────────
+app.get('/api/current-draw', (_req, res) => {
+  try {
+    res.json(activePayload());
+  } catch (err) {
+    console.error('查询实时抽签状态失败:', err);
+    res.status(500).json({ error: '查询失败' });
+  }
+});
+
+app.post('/api/current-draw/reset', (_req, res) => {
+  try {
+    stmts.clearActiveDraws.run();
+    res.json({ success: true, ...activePayload() });
+  } catch (err) {
+    console.error('重置实时抽签失败:', err);
+    res.status(500).json({ error: '重置失败' });
+  }
+});
+
+app.post('/api/current-draw/spin', (req, res) => {
+  const name = String((req.body && req.body.name) || '').trim();
+  if (!name) return res.status(400).json({ error: '姓名不能为空' });
+
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    const current = stmts.listActiveDraws.all();
+    if (current.length >= 12) {
+      db.exec('COMMIT');
+      return res.status(409).json({ error: '本轮 12 个号码已全部抽完', ...activePayload() });
+    }
+
+    const used = new Set(current.map(d => d.draw_number));
+    const available = [];
+    for (let i = 1; i <= 12; i++) if (!used.has(i)) available.push(i);
+    const drawNumber = available[Math.floor(Math.random() * available.length)];
+    const drawOrder = current.length;
+
+    stmts.insertActiveDraw.run(drawOrder, name, drawNumber);
+    const draw = { draw_order: drawOrder, member_name: name, draw_number: drawNumber };
+    const completedSession = drawOrder === 11 ? persistCompletedActiveSession() : null;
+    db.exec('COMMIT');
+
+    res.status(201).json({ success: true, draw, completed: drawOrder === 11, session: completedSession, ...activePayload() });
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch (_) {}
+    console.error('服务器分配抽签号码失败:', err);
+    res.status(500).json({ error: '抽签失败' });
+  }
+});
+
 // ── POST /api/sessions ────────────────────────────────────────────────────────
 app.post('/api/sessions', (req, res) => {
   const { draws, note } = req.body || {};
   if (!Array.isArray(draws) || draws.length === 0) {
     return res.status(400).json({ error: 'draws 数组不能为空' });
+  }
+  const seen = new Set();
+  for (const d of draws) {
+    const num = Number(d && d.number);
+    if (!Number.isInteger(num) || num < 1 || num > 12) {
+      return res.status(400).json({ error: '抽签号码必须是 1-12 的整数' });
+    }
+    if (seen.has(num)) {
+      return res.status(400).json({ error: '同一轮抽签不能出现重复号码' });
+    }
+    seen.add(num);
   }
 
   try {
@@ -133,7 +236,7 @@ app.delete('/api/sessions/:id', (req, res) => {
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`幸运抽签系统已启动  http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`幸运抽签系统已启动  http://${HOST}:${PORT}`);
   console.log(`数据库路径: ${DB_PATH}`);
 });
